@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CI Pipeline – Workflow Explained</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0d1117;
+      color: #c9d1d9;
+      padding: 40px 20px;
+    }
+
+    h1 {
+      text-align: center;
+      font-size: 1.8rem;
+      color: #58a6ff;
+      margin-bottom: 8px;
+    }
+
+    .subtitle {
+      text-align: center;
+      color: #8b949e;
+      margin-bottom: 48px;
+      font-size: 0.95rem;
+    }
+
+    /* ── Trigger ── */
+    .trigger {
+      text-align: center;
+      margin-bottom: 12px;
+    }
+
+    .trigger-badge {
+      display: inline-block;
+      background: #1f6feb;
+      color: #fff;
+      padding: 8px 24px;
+      border-radius: 20px;
+      font-weight: 600;
+      font-size: 0.9rem;
+      letter-spacing: 0.5px;
+    }
+
+    .trigger-label {
+      font-size: 0.75rem;
+      color: #8b949e;
+      margin-top: 6px;
+    }
+
+    /* ── Arrow ── */
+    .arrow {
+      text-align: center;
+      font-size: 1.4rem;
+      color: #30363d;
+      margin: 4px 0;
+      line-height: 1;
+    }
+
+    /* ── Job card ── */
+    .job {
+      max-width: 640px;
+      margin: 0 auto 4px;
+      border: 1px solid #30363d;
+      border-radius: 10px;
+      overflow: hidden;
+    }
+
+    .job-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 18px;
+      font-weight: 700;
+      font-size: 1rem;
+    }
+
+    .job-header .icon { font-size: 1.1rem; }
+
+    .job.lint  .job-header { background: #161b22; border-bottom: 2px solid #388bfd; color: #58a6ff; }
+    .job.test  .job-header { background: #161b22; border-bottom: 2px solid #3fb950; color: #3fb950; }
+    .job.deploy .job-header { background: #161b22; border-bottom: 2px solid #d29922; color: #e3b341; }
+
+    .needs-badge {
+      margin-left: auto;
+      font-size: 0.7rem;
+      font-weight: 500;
+      background: #21262d;
+      border: 1px solid #30363d;
+      border-radius: 12px;
+      padding: 2px 10px;
+      color: #8b949e;
+    }
+
+    .steps { padding: 14px 18px; display: flex; flex-direction: column; gap: 8px; }
+
+    .step {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      background: #161b22;
+      border: 1px solid #21262d;
+      border-radius: 8px;
+      padding: 10px 14px;
+    }
+
+    .step-num {
+      min-width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.7rem;
+      font-weight: 700;
+      margin-top: 1px;
+    }
+
+    .job.lint  .step-num { background: #388bfd22; color: #58a6ff; border: 1px solid #388bfd55; }
+    .job.test  .step-num { background: #3fb95022; color: #3fb950; border: 1px solid #3fb95055; }
+    .job.deploy .step-num { background: #d2992222; color: #e3b341; border: 1px solid #d2992255; }
+
+    .step-body { flex: 1; }
+
+    .step-name {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: #e6edf3;
+      margin-bottom: 3px;
+    }
+
+    .step-desc { font-size: 0.78rem; color: #8b949e; line-height: 1.5; }
+
+    code {
+      background: #21262d;
+      border: 1px solid #30363d;
+      border-radius: 4px;
+      padding: 1px 6px;
+      font-family: 'SFMono-Regular', Consolas, monospace;
+      font-size: 0.78rem;
+      color: #79c0ff;
+    }
+
+    /* ── Fail path ── */
+    .fail-note {
+      max-width: 640px;
+      margin: 0 auto;
+      text-align: right;
+      font-size: 0.72rem;
+      color: #f85149;
+      padding-right: 6px;
+      margin-bottom: 2px;
+    }
+
+    /* ── Success ── */
+    .success {
+      text-align: center;
+      margin-top: 8px;
+    }
+
+    .success-badge {
+      display: inline-block;
+      background: #238636;
+      color: #fff;
+      padding: 8px 28px;
+      border-radius: 20px;
+      font-weight: 700;
+      font-size: 0.9rem;
+    }
+
+    /* ── VM note ── */
+    .vm-note {
+      max-width: 640px;
+      margin: 36px auto 0;
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 14px 18px;
+      font-size: 0.8rem;
+      color: #8b949e;
+      line-height: 1.7;
+    }
+
+    .vm-note strong { color: #c9d1d9; }
+  </style>
+</head>
+<body>
+
+  <h1>CI Pipeline</h1>
+  <p class="subtitle">GitHub Actions workflow — <code>.github/workflows/ci.yml</code></p>
+
+  <!-- Trigger -->
+  <div class="trigger">
+    <div class="trigger-badge">⚡ git push</div>
+    <div class="trigger-label">on: push — fires on every push to any branch</div>
+  </div>
+
+  <div class="arrow">↓</div>
+
+  <!-- JOB 1: Lint -->
+  <div class="job lint">
+    <div class="job-header">
+      <span class="icon">🔵</span> Job 1 — Lint
+      <span class="needs-badge">no dependencies</span>
+    </div>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-body">
+          <div class="step-name">Checkout code</div>
+          <div class="step-desc">
+            <code>actions/checkout@v6</code> — downloads your repo onto the fresh Ubuntu VM.
+            Without this the runner has no files to work with.
+          </div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-body">
+          <div class="step-name">Setup Node.js</div>
+          <div class="step-desc">
+            <code>actions/setup-node@v5</code> with <code>node-version: 22</code> and
+            <code>cache: npm</code> — installs Node 22 and caches <code>node_modules</code>
+            to speed up future runs.
+          </div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-body">
+          <div class="step-name">Install dependencies</div>
+          <div class="step-desc">
+            <code>npm ci</code> — clean, deterministic install from <code>package-lock.json</code>.
+            Preferred over <code>npm install</code> in CI environments.
+          </div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-body">
+          <div class="step-name">Run linter</div>
+          <div class="step-desc">
+            <code>npm run lint</code> — runs ESLint on all <code>.jsx</code> files in <code>src/</code>.
+            Any lint error fails this job and stops the pipeline.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="fail-note">❌ lint fails → pipeline stops here</div>
+  <div class="arrow">↓ passes</div>
+
+  <!-- JOB 2: Test -->
+  <div class="job test">
+    <div class="job-header">
+      <span class="icon">🟢</span> Job 2 — Test
+      <span class="needs-badge">needs: lint</span>
+    </div>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-body">
+          <div class="step-name">Checkout code</div>
+          <div class="step-desc">
+            Fresh VM — repo must be checked out again with <code>actions/checkout@v6</code>.
+          </div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-body">
+          <div class="step-name">Setup Node.js</div>
+          <div class="step-desc">
+            <code>actions/setup-node@v5</code> — Node 22 installed again on this new VM.
+          </div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-body">
+          <div class="step-name">Install dependencies</div>
+          <div class="step-desc"><code>npm ci</code> — clean install again on this VM.</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-body">
+          <div class="step-name">Run tests</div>
+          <div class="step-desc">
+            <code>npm run test</code> — runs Vitest. Any failing test stops the pipeline
+            and <strong>deploy never runs</strong>.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="fail-note">❌ test fails → pipeline stops here</div>
+  <div class="arrow">↓ passes</div>
+
+  <!-- JOB 3: Deploy -->
+  <div class="job deploy">
+    <div class="job-header">
+      <span class="icon">🟡</span> Job 3 — Deploy
+      <span class="needs-badge">needs: test</span>
+    </div>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-body">
+          <div class="step-name">Checkout code</div>
+          <div class="step-desc">
+            Fresh VM again — <code>actions/checkout@v6</code> checks out the repo.
+          </div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-body">
+          <div class="step-name">Setup Node.js</div>
+          <div class="step-desc">
+            <code>actions/setup-node@v5</code> — Node 22 on this VM.
+          </div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-body">
+          <div class="step-name">Install dependencies</div>
+          <div class="step-desc"><code>npm ci</code> — clean install.</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-body">
+          <div class="step-name">Build project</div>
+          <div class="step-desc">
+            <code>npm run build</code> — runs Vite to produce the production bundle in <code>dist/</code>.
+          </div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">5</div>
+        <div class="step-body">
+          <div class="step-name">Deploy</div>
+          <div class="step-desc">
+            Placeholder step — replace with your real deployment command
+            (e.g. Netlify, Vercel, AWS S3, etc.).
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow">↓</div>
+
+  <!-- Success -->
+  <div class="success">
+    <div class="success-badge">✅ Deployed!</div>
+  </div>
+
+  <!-- VM note -->
+  <div class="vm-note">
+    <strong>💡 Key concept — each job runs on a fresh VM.</strong><br>
+    GitHub spins up a brand-new <code>ubuntu-latest</code> virtual machine for every job.
+    That's why checkout, Node setup, and <code>npm ci</code> are repeated in each job —
+    nothing carries over between them.<br><br>
+    <strong>💡 <code>needs:</code> controls the order.</strong><br>
+    Without <code>needs:</code>, all jobs run in parallel. Adding <code>needs: lint</code>
+    to the test job and <code>needs: test</code> to deploy creates the sequential gate pattern:
+    bad code can never reach deployment.
+  </div>
+
+</body>
+</html>
+
